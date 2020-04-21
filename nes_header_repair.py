@@ -18,35 +18,21 @@ import sys
 from math import log
 
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
-START_PATH = '.'
+START_PATH = '../SM'
 
 # Use NES 2.0 headers. Set to 0 for NES 1.0 header
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 1
+TRIAL_RUN = 0
 
 # Set to 1 to enable moving all unrecognised roms to ../unsupported
 SORT_UNKNOWN = 1
 
-# Set to 1 to enable sorting ROMs to preset catagories
-SORT_ROMS = 1
-
 # Converts unrecognised UNIF roms to unheadered, and adds .unh to all unheadered roms
 MARK_UNHEADERED = 1
 
-# 0 = no renaming 1 = ascii renaming only 2 = full unicode renaming (Python3 only)
-RENAME_FILES = 1
-
-
 ##### BELOW HERE IS CODE #####
-
-names = {}
-catagories = {}
-
-if (sys.version_info[0] < 3) and RENAME_FILES > 1:
-	RENAME_FILES = 1
-	print("Unicode renaming files is only supported in Python3.")
 
 def make_rom_byte(romsize, divis, nes2):
 	rombyte = 0
@@ -96,14 +82,14 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 	header[4] = make_rom_byte(prgrom, 16384, nes2)
 	header[5] = make_rom_byte(chrrom, 8192, nes2)
 	header[6] = ((pcbBattery << 1) | mirrornibble | ((pcbMapper & 0xF) << 4))
-	header[7] = ((0x8 if nes2 else 0) | consoleType | (pcbMapper & 0xF0))
+	header[7] = ((0x8 if nes2 else 0) | (3 if consoleType >= 3 else consoleType) | (pcbMapper & 0xF0))
 	if nes2:
 		header[8] = (((pcbMapper & 0xF00) >> 8) | ((pcbSubMapper & 0xF) << 4))
 		header[9] = (make_rom_nibble(prgrom, 16384) | (make_rom_nibble(chrrom, 8192) << 4))
 		header[10] = find_power_of_two(prgram) | ((find_power_of_two(prgnvram)) << 4)
 		header[11] = find_power_of_two(chrram) | ((find_power_of_two(chrnvram)) << 4)
 		header[12] = (consoleRegion & 0x03)
-		header[13] = (((vsHardware & 0x0F) << 4) | (vsPpu & 0x0F)) if header[7] & 0x3 == 0x1 else 0
+		header[13] = (((vsHardware & 0x0F) << 4) | (vsPpu & 0x0F)) if (header[7] & 0x3) == 0x1 else (consoleType & 0xF)
 		header[14] = (miscrom & 0x3)
 		header[15] = (expansion & 0x3F)
 
@@ -137,7 +123,6 @@ def populate_dict(nes2):
 		pcbMapper = 0
 		pcbSubMapper = 0
 		pcbBattery = 0
-		name = child.get('name')
 
 		for pet in child:
 			if pet.tag == 'rom':
@@ -173,75 +158,6 @@ def populate_dict(nes2):
 
 		headers[sha1.upper()] = make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, consoleType, consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring, pcbMapper, pcbSubMapper, pcbBattery, nes2)
 
-		if RENAME_FILES > 0:
-			try:
-				base_dir, sep, base_name = name.partition('\\')
-				catagories[sha1.upper()] = base_dir
-
-				if RENAME_FILES == 1:
-					base_name = base_name.replace(u'\ua789', ' -')
-					base_name = base_name.encode('ascii')
-					if (sys.version_info[0] < 3):
-						base_name = base_name.decode('ascii')
-					else:
-						base_name = str(base_name, 'ascii')
-
-				base_name = base_name[0:len(base_name) - 4]
-
-				if (base_name[0:4] == 'The '):
-					base_name = base_name[4:] + ', The'
-
-				if (base_name[0:2] == 'A '):
-					base_name = base_name[2:] + ', A'
-
-				affix = ''
-				if base_dir == 'Licensed Japan':
-					affix = ' (JP)'
-				elif base_dir == 'Licensed North America':
-					affix = ' (NA)'
-				elif base_dir == 'Licensed PAL':
-					affix = ' (PAL)'
-				elif base_dir == 'Playchoice':
-					affix = ' (PC10)'
-				elif base_dir == 'Vs. System':
-					affix = ' (VS)'
-				elif base_dir == 'Unlicensed Taiwan':
-					affix = ' (TW)(UNL)'
-				elif base_dir == 'Unlicensed China':
-					affix = ' (C)(UNL)'
-				elif base_dir == 'Unlicensed Japan':
-					affix = ' (JP)(UNL)'
-				elif base_dir == 'Unlicensed North America':
-					affix = ' (NA)(UNL)'
-				elif base_dir == 'Unlicensed PAL':
-					affix = ' (PAL)(UNL)'
-				elif base_dir == 'Unlicensed South Korea':
-					affix = ' (SK)(UNL)'
-				elif base_dir == 'Plug-and-Play':
-					affix = ' (PNP)'
-				elif base_dir == 'Multicarts':
-					affix = ' (Multi)'
-				elif base_dir == 'Bootleg Singles':
-					affix = ' (Bootleg)'
-				elif base_dir == 'Bootleg Hacks':
-					affix = ' (Bootleg)(Hack)'
-				elif base_dir == 'Homebrew':
-					affix = ' (Homebrew)'
-				elif base_dir == 'Compatibility Hacks':
-					affix = ' (Hack)'
-				elif base_dir == 'Modern Re-releases':
-					affix = ' (RR)'
-				elif base_dir == 'Unreleased':
-					affix = ' (Unreleased)'
-				elif base_dir == 'Bad Dumps':
-					affix = ' (Bad)'
-
-				base_name = base_name + affix + '.nes'
-
-				names[sha1.upper()] = base_name
-			except Exception as e:
-				pass
-
 	return headers
 
 # Python 2 vs 3 compatibility schenanigans
@@ -267,11 +183,8 @@ def mirror_paths(sort_dir):
 
 def walk_dirs(rom_headers, start_path):
 	for root, dirs, files in os.walk(start_path):
-		unknown_sort_dir = root.replace(start_path, os.path.join('..', 'unsupported'), 1)
-		sort_dir = os.path.join('..', 'NES_SORTED')
+		unknown_sort_dir = root.replace(start_path, os.path.join('..', 'nes_unknown'), 1)
 
-		if SORT_ROMS and not TRIAL_RUN:
-			mirror_paths(sort_dir)
 		if SORT_UNKNOWN and not TRIAL_RUN:
 			mirror_paths(unknown_sort_dir)
 
@@ -335,33 +248,11 @@ def walk_dirs(rom_headers, start_path):
 
 				shastr = sha.hexdigest().upper()
 
-				filename = file
-				try:
-					if RENAME_FILES > 0:
-						filename = names[shastr]
-						if filename != file:
-							print ('Renaming ' + file + ' to ' + filename)
-							if not TRIAL_RUN:
-								os.rename(fullname, os.path.join(root, filename))
-								fullname = os.path.join(root, filename)
-								full_sort_name = os.path.join(unknown_sort_dir, filename)
-								file = filename
-				except:
-					pass
-
 				try:
 					hstring = rom_headers[shastr]
 
-					if SORT_ROMS:
-						sort_path = os.path.join(sort_dir, catagories[shastr])
-						print('Moving ' + file + ' to ' + sort_path)
-						if not TRIAL_RUN:
-							mirror_paths(sort_path)
-							os.rename(fullname, os.path.join(sort_path, file))
-							fullname = os.path.join(sort_path, file)
-
 					if header != hstring:
-						print('Updating header for SHA1:' + shastr + ' File: ' + filename)
+						print('Updating header for SHA1:' + shastr + ' File: ' + file)
 						if (header != '0'):
 							print(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in header]) + ' (old)')
 						print(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in bytes(hstring)]) + ' (new)\n')
