@@ -18,13 +18,13 @@ import sys
 from math import log
 
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
-START_PATH = '../SM'
+START_PATH = '.'
 
 # Use NES 2.0 headers. Set to 0 for NES 1.0 header
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 0
+TRIAL_RUN = 1
 
 # Set to 1 to enable moving all unrecognised roms to ../unsupported
 SORT_UNKNOWN = 1
