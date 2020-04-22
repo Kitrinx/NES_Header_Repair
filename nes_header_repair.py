@@ -8,15 +8,6 @@
 # For NES 2.0 header reference see:
 # https://wiki.nesdev.com/w/index.php/NES_2.0
 
-import xml.etree.ElementTree as ET
-import hashlib
-import binascii
-import struct
-import os
-import errno
-import sys
-from math import log
-
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
 START_PATH = '.'
 
@@ -26,13 +17,28 @@ NES_20 = 1
 # Set to 1 to prevent altering any files
 TRIAL_RUN = 1
 
-# Set to 1 to enable moving all unrecognised roms to ../unsupported
+# Set to 1 to enable moving all unrecognised roms to ../nes_unknown
 SORT_UNKNOWN = 1
 
 # Converts unrecognised UNIF roms to unheadered, and adds .unh to all unheadered roms
 MARK_UNHEADERED = 1
 
+# Level of verbosity for output. 0 is none, 1 is errors, 2 is important info, 3 is normal output, 4 is verbose
+VERBOSITY = 3
+
+
 ##### BELOW HERE IS CODE #####
+
+
+import xml.etree.ElementTree as ET
+import hashlib
+import os
+import errno
+from math import log
+
+def print_log(message, level):
+	if (level <= VERBOSITY):
+		print(message)
 
 def make_rom_byte(romsize, divis, nes2):
 	rombyte = 0
@@ -89,7 +95,8 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 		header[10] = find_power_of_two(prgram) | ((find_power_of_two(prgnvram)) << 4)
 		header[11] = find_power_of_two(chrram) | ((find_power_of_two(chrnvram)) << 4)
 		header[12] = (consoleRegion & 0x03)
-		header[13] = (((vsHardware & 0x0F) << 4) | (vsPpu & 0x0F)) if (header[7] & 0x3) == 0x1 else (consoleType & 0xF)
+		header[13] = (((vsHardware & 0x0F) << 4) | (vsPpu & 0x0F)) if (header[7] & 0x3) == 0x1 else (
+			(consoleType & 0xF) if (header[7] & 0x3) == 0x3 else 0)
 		header[14] = (miscrom & 0x3)
 		header[15] = (expansion & 0x3F)
 
@@ -99,8 +106,9 @@ def populate_dict(nes2):
 	try:
 		tree = ET.parse('nes20db.xml')
 	except:
-		print("nes20db.xml is missing. Please place it in the same folder as this script.")
+		print_log("nes20db.xml is missing. Please place it in the same folder as this script.", 1)
 		raise
+
 	root = tree.getroot()
 
 	headers = {}
@@ -124,39 +132,44 @@ def populate_dict(nes2):
 		pcbSubMapper = 0
 		pcbBattery = 0
 
-		for pet in child:
-			if pet.tag == 'rom':
-				sha1 = pet.get('sha1')
-			elif pet.tag == 'prgrom':
-				prgrom = int(pet.get('size'))
-			elif pet.tag == 'prgram':
-				prgram = int(pet.get('size'))
-			elif pet.tag == 'prgnvram':
-				prgnvram = int(pet.get('size'))
-			elif pet.tag == 'chrrom':
-				chrrom = int(pet.get('size'))
-			elif pet.tag == 'chrram':
-				chrram = int(pet.get('size'))
-			elif pet.tag == 'chrnvram':
-				chrnvram = int(pet.get('size'))
-			elif pet.tag == 'miscrom':
-				miscrom = int(pet.get('number'))
-			elif pet.tag == 'console':
-				consoleType = int(pet.get('type'))
-				consoleRegion = int(pet.get('region'))
-			elif pet.tag == 'expansion':
-				expansion = int(pet.get('type'))
-			elif pet.tag == 'pcb':
-				pcbMapper = int(pet.get('mapper'))
-				pcbSubMapper = int(pet.get('submapper'))
-				pcbMirroring = pet.get('mirroring')
-				pcbBattery = int(pet.get('battery'))
-			elif pet.tag == 'vs':
-				vsHardware = int(pet.get('hardware'))
-				vsPpu = int(pet.get('ppu'))
+		try:
+			for pet in child:
+				if pet.tag == 'rom':
+					sha1 = pet.get('sha1')
+				elif pet.tag == 'prgrom':
+					prgrom = int(pet.get('size'))
+				elif pet.tag == 'prgram':
+					prgram = int(pet.get('size'))
+				elif pet.tag == 'prgnvram':
+					prgnvram = int(pet.get('size'))
+				elif pet.tag == 'chrrom':
+					chrrom = int(pet.get('size'))
+				elif pet.tag == 'chrram':
+					chrram = int(pet.get('size'))
+				elif pet.tag == 'chrnvram':
+					chrnvram = int(pet.get('size'))
+				elif pet.tag == 'miscrom':
+					miscrom = int(pet.get('number'))
+				elif pet.tag == 'console':
+					consoleType = int(pet.get('type'))
+					consoleRegion = int(pet.get('region'))
+				elif pet.tag == 'expansion':
+					expansion = int(pet.get('type'))
+				elif pet.tag == 'pcb':
+					pcbMapper = int(pet.get('mapper'))
+					pcbSubMapper = int(pet.get('submapper'))
+					pcbMirroring = pet.get('mirroring')
+					pcbBattery = int(pet.get('battery'))
+				elif pet.tag == 'vs':
+					vsHardware = int(pet.get('hardware'))
+					vsPpu = int(pet.get('ppu'))
+		except Exception as e:
+			print_log(e, 1)
+			continue
 
-
-		headers[sha1.upper()] = make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, consoleType, consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring, pcbMapper, pcbSubMapper, pcbBattery, nes2)
+		headers[sha1.upper()] = make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram,
+			miscrom, consoleType, consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring,
+			pcbMapper, pcbSubMapper, pcbBattery, nes2)
 
 	return headers
 
@@ -175,11 +188,136 @@ def from_bytes (data, big_endian = False):
 	return num
 
 def mirror_paths(sort_dir):
+	if not TRIAL_RUN:
+		try:
+			os.makedirs(sort_dir)
+		except OSError as e:
+			if e.errno != errno.EEXIST:
+				print_log(e, 1)
+				raise
+
+def rename_file(original, new):
+	if not TRIAL_RUN:
+		try:
+			os.rename(original, new)
+		except Exception as e:
+			print_log(e, 1)
+
+def write_new_file(header, romdata, file):
+	if not TRIAL_RUN:
+		try:
+			with open(file, 'wb') as fixedfile:
+				if len(header) > 0:
+					fixedfile.write(header)
+				if len(romdata) > 0:
+					fixedfile.write(romdata)
+
+		except Exception as e:
+			print_log(e, 1)
+
+def parse_rom_data(fullname, file):
+	prgrom = bytearray()
+	chrrom = bytearray()
+	buf = 0
+	header = '0'
+	unif = 0
+	unheadered = 0
+
+	with open(fullname, 'rb') as romfile:
+		buf = romfile.read(16)
+		header_id = version_safe_str(buf)
+
+		if header_id == 'NES':
+			header = buf
+		elif header_id == "UNI":
+			# F**K UNIF ROMS.
+			unif = 1
+
+			buf = romfile.read(16)
+			buf = romfile.read(4)
+			command = version_safe_str(buf)
+
+			while len(buf) > 0:
+				buf = romfile.read(4)
+				readlength = 0
+				if isinstance(buf[0], str):
+					readlength = from_bytes(buf)
+				else:
+					readlength = int.from_bytes(buf, byteorder='little')
+				buf = romfile.read(readlength)
+				if command == 'PRG':
+					prgrom.extend(buf)
+					print_log(command + ' size ' + str(readlength), 4)
+				elif command == 'CHR':
+					chrrom.extend(buf)
+					print_log(command + ' size ' + str(readlength), 4)
+				buf = romfile.read(4)
+				if (len(buf) > 0):
+					command = version_safe_str(buf)
+
+			print_log('UNIF file detected, attempting to convert: ' + file, 2)
+		else:
+			print_log('Attempting to evaluate unheadered ROM: ' + file, 2)
+			unheadered = 1
+			prgrom.extend(buf)
+
+		while len(buf) > 0:
+			buf = romfile.read(65536)
+			prgrom.extend(buf)
+
+	return prgrom + chrrom, header, unif, unheadered
+
+def process_rom(rom_headers, root, unknown_sort_dir, file):
+	fullname = os.path.join(root, file)
+	full_sort_name = os.path.join(unknown_sort_dir, file)
+	sha = hashlib.sha1()
+
+	romdata, header, unif, unheadered = parse_rom_data(fullname, file)
+
+	sha.update(romdata)
+	shastr = sha.hexdigest().upper()
+
 	try:
-		os.makedirs(sort_dir)
-	except OSError as e:
-		if e.errno != errno.EEXIST:
-			raise
+		hstring = rom_headers[shastr]
+
+		if header != hstring:
+			print_log('Updating header for SHA1:' + shastr + ' File: ' + file, 3)
+			if (header != '0'):
+				print_log(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in header]) + ' (old)', 4)
+			print_log(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in bytes(hstring)]) + ' (new)\n', 4)
+			write_new_file(hstring, romdata, fullname)
+
+	except:
+		print_log('ROM not found in database. SHA1: ' + shastr + ' File: ' + file, 3)
+		print_log('', 4)
+		if MARK_UNHEADERED and not TRIAL_RUN:
+			if unif:
+				write_new_file('', romdata, fullname)
+				unheadered = 1
+
+			if unheadered:
+				if (fullname[len(fullname) - 4:].lower() != '.unh'):
+					rename_file(fullname, fullname + '.unh')
+					fullname = fullname + '.unh'
+					full_sort_name = full_sort_name + '.unh'
+
+		if SORT_UNKNOWN and not TRIAL_RUN:
+			rename_file(fullname, full_sort_name)
+
+def process_fds(root, file):
+	fullname = os.path.join(root, file)
+	diskdata = bytearray()
+	buf = 0
+	with open(fullname, 'rb') as romfile:
+		buf = romfile.read(16)
+		header_id = version_safe_str(buf)
+		if header_id != 'FDS' and header_id != 'NES':
+			return
+		while len(buf) > 0:
+			buf = romfile.read(65536)
+			diskdata.extend(buf)
+
+	write_new_file('', diskdata, fullname)
 
 def walk_dirs(rom_headers, start_path):
 	for root, dirs, files in os.walk(start_path):
@@ -189,118 +327,18 @@ def walk_dirs(rom_headers, start_path):
 			mirror_paths(unknown_sort_dir)
 
 		for file in files:
-			fullname = os.path.join(root, file)
-			full_sort_name = os.path.join(unknown_sort_dir, file)
-			if file.lower().rfind('.nes') > 0:
-				sha = hashlib.sha1()
-				header = '0'
-				unif = 0
-				unh = 0
-				prgrom = bytearray()
-				chrrom = bytearray()
-				buf = 0
 
-				with open(fullname, 'rb') as romfile:
-					buf = romfile.read(16)
-					header_id = version_safe_str(buf)
-
-					if header_id == 'NES':
-						header = buf
-					elif header_id == "UNI":
-						# F**K UNIF ROMS.
-						unif = 1
-
-						buf = romfile.read(16)
-						buf = romfile.read(4)
-						command = version_safe_str(buf)
-						while len(buf) > 0:
-							buf = romfile.read(4)
-							readlength = 0
-							if isinstance(buf[0], str):
-								readlength = from_bytes(buf)
-							else:
-								readlength = int.from_bytes(buf, byteorder='little')
-							buf = romfile.read(readlength)
-							if command == 'PRG':
-								prgrom.extend(buf)
-								print(command + ' size ' + str(readlength))
-								sha.update(buf)
-							elif command == 'CHR':
-								chrrom.extend(buf)
-								print(command + ' size ' + str(readlength))
-								sha.update(buf)
-							buf = romfile.read(4)
-							if (len(buf) > 0):
-								command = version_safe_str(buf)
-
-						print('UNIF file detected, attempting to convert: ' + file)
-					else:
-						print('Attempting to evaluate unheadered ROM: ' + file)
-						unh = 1
-						prgrom.extend(buf)
-						sha.update(buf)
-
-					while len(buf) > 0:
-						buf = romfile.read(65536)
-						prgrom.extend(buf)
-						if len(buf) > 0:
-							sha.update(buf)
-
-				shastr = sha.hexdigest().upper()
-
-				try:
-					hstring = rom_headers[shastr]
-
-					if header != hstring:
-						print('Updating header for SHA1:' + shastr + ' File: ' + file)
-						if (header != '0'):
-							print(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in header]) + ' (old)')
-						print(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in bytes(hstring)]) + ' (new)\n')
-						if not TRIAL_RUN:
-							if unif:
-								with open(fullname, 'wb') as fixedfile:
-									fixedfile.write(hstring)
-									fixedfile.write(prgrom)
-									fixedfile.write(chrrom)
-							else:
-								with open(fullname, 'wb') as fixedfile:
-									fixedfile.write(hstring)
-									fixedfile.write(prgrom)
-				except:
-					print('ROM not found in database. SHA1: ' + shastr + ' File: ' + file + '\n')
-					if MARK_UNHEADERED and not TRIAL_RUN:
-						if unif or unh:
-							if (fullname[len(fullname) - 4:].lower() != '.unh'):
-								os.rename(fullname, fullname + '.unh')
-								fullname = fullname + '.unh'
-								full_sort_name = full_sort_name + '.unh'
-
-							if unif:
-								with open(fullname, 'wb') as fixedfile:
-									fixedfile.write(prgrom)
-									fixedfile.write(chrrom)
-
-					if SORT_UNKNOWN and not TRIAL_RUN:
-						os.rename(fullname, full_sort_name)
+			if file.lower().rfind('.nes') > 0 or file.lower().rfind('.unif') > 0:
+				process_rom(rom_headers, root, unknown_sort_dir, file)
 
 			elif file.lower().rfind('.fds') > 0:
-				diskdata = bytearray()
-				buf = 0
-				with open(fullname, 'rb') as romfile:
-					buf = romfile.read(16)
-					header_id = version_safe_str(buf)
-					if header_id != 'FDS' and header_id != 'NES':
-						continue
-					while len(buf) > 0:
-						buf = romfile.read(65536)
-						diskdata.extend(buf)
-				if not TRIAL_RUN:
-					with open(fullname, 'wb') as fixedfile:
-						print("Trimming FDS header from " + file + '\n')
-						fixedfile.write(diskdata)
+				process_fds(root, file)
 
+### Main ###
 
-print('Reading XML, please wait...')
+print_log('Reading XML, please wait...', 2)
 rom_headers = populate_dict(NES_20) #populate with argument 0 for iNES 1.0 headers
-print('Evaluating files...')
+print_log('Evaluating files...', 2)
 walk_dirs(rom_headers, START_PATH)
+print_log('\n\nProcessing complete.' +
+	(' This has been a trial run. See the top of the script to change options.' if TRIAL_RUN else ''), 2)
