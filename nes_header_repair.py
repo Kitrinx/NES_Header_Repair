@@ -9,13 +9,14 @@
 # https://wiki.nesdev.com/w/index.php/NES_2.0
 
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
-START_PATH = '.'
+START_PATH = '../SM'
 
-# Use NES 2.0 headers. Set to 0 for NES 1.0 header
+# Use NES 2.0 headers. Set to 0 for NES 1.0 header. As not all roms can be properly represented
+# with iNES 1.0 headers, it is suggested to stay with 2.0.
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 1
+TRIAL_RUN = 0
 
 # Set to 1 to enable moving all unrecognised roms to ../nes_unknown
 SORT_UNKNOWN = 1
@@ -23,8 +24,11 @@ SORT_UNKNOWN = 1
 # Converts unrecognised UNIF roms to unheadered, and adds .unh to all unheadered roms
 MARK_UNHEADERED = 1
 
+# Trims any extra junk bytes that may be at the end of files from bad dumps, etc
+TRIM_UNKNOWN_DATA = 1
+
 # Level of verbosity for output. 0 is none, 1 is errors, 2 is important info, 3 is normal output, 4 is verbose
-VERBOSITY = 3
+VERBOSITY = 4
 
 
 ##### BELOW HERE IS CODE #####
@@ -35,6 +39,7 @@ import hashlib
 import os
 import errno
 from math import log
+from math import pow
 
 def print_log(message, level):
 	if (level <= VERBOSITY):
@@ -72,13 +77,32 @@ def make_rom_nibble(romsize, divis):
 def find_power_of_two(base10):
 	return (int(log(base10 / 64, 2) if base10 > 0 else 0) & 0xF)
 
-def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, consoleType, consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring, pcbMapper, pcbSubMapper, pcbBattery, nes2):
+def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, consoleType,
+	consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring, pcbMapper, pcbSubMapper, pcbBattery,
+	trainer, nes2):
 
+	#default to 'H' for anything invalid
 	mirrornibble = 0
-	if pcbMirroring == 'V':
-		mirrornibble = 0x1
-	elif pcbMirroring == '4':
-		mirrornibble = 0x8
+
+	if pcbMapper == 30:
+		if pcbMirroring == 'V':
+			mirrornibble = 0x1
+		elif pcbMirroring == '1':
+			mirrornibble = 0x8
+		elif pcbMirroring == '4':
+			mirrornibble = 0x9
+	elif pcbMapper == 218:
+		if pcbMirroring == 'V':
+			mirrornibble = 0x1
+		elif pcbMirroring == '0':
+			mirrornibble = 0x8
+		elif pcbMirroring == '1':
+			mirrornibble = 0x9
+	else:
+		if pcbMirroring == 'V':
+			mirrornibble = 0x1
+		elif pcbMirroring == '4':
+			mirrornibble = 0x8
 
 	header = bytearray(16)
 	header[0] = 0x4E
@@ -87,7 +111,7 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 	header[3] = 0x1A
 	header[4] = make_rom_byte(prgrom, 16384, nes2)
 	header[5] = make_rom_byte(chrrom, 8192, nes2)
-	header[6] = ((pcbBattery << 1) | mirrornibble | ((pcbMapper & 0xF) << 4))
+	header[6] = ((pcbBattery << 1) | mirrornibble | (0x4 if trainer > 0 else 0) | ((pcbMapper & 0xF) << 4))
 	header[7] = ((0x8 if nes2 else 0) | (3 if consoleType >= 3 else consoleType) | (pcbMapper & 0xF0))
 	if nes2:
 		header[8] = (((pcbMapper & 0xF00) >> 8) | ((pcbSubMapper & 0xF) << 4))
@@ -131,6 +155,7 @@ def populate_dict(nes2):
 		pcbMapper = 0
 		pcbSubMapper = 0
 		pcbBattery = 0
+		trainer = 0
 
 		try:
 			for pet in child:
@@ -146,6 +171,8 @@ def populate_dict(nes2):
 					chrrom = int(pet.get('size'))
 				elif pet.tag == 'chrram':
 					chrram = int(pet.get('size'))
+				elif pet.tag == 'trainer':
+					trainer = int(pet.get('size'))
 				elif pet.tag == 'chrnvram':
 					chrnvram = int(pet.get('size'))
 				elif pet.tag == 'miscrom':
@@ -169,7 +196,7 @@ def populate_dict(nes2):
 
 		headers[sha1.upper()] = make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram,
 			miscrom, consoleType, consoleRegion, expansion, vsHardware, vsPpu, pcbMirroring,
-			pcbMapper, pcbSubMapper, pcbBattery, nes2)
+			pcbMapper, pcbSubMapper, pcbBattery, trainer, nes2)
 
 	return headers
 
@@ -203,17 +230,48 @@ def rename_file(original, new):
 		except Exception as e:
 			print_log(e, 1)
 
-def write_new_file(header, romdata, file):
+def write_new_file(header, romdata, file, write_size = 0):
 	if not TRIAL_RUN:
+		if write_size == 0 or TRIM_UNKNOWN_DATA == 0:
+			write_size = len(romdata)
+		else:
+			print_log('Trimming unknown data for ' + file, 3)
+
 		try:
 			with open(file, 'wb') as fixedfile:
 				if len(header) > 0:
 					fixedfile.write(header)
 				if len(romdata) > 0:
-					fixedfile.write(romdata)
+					fixedfile.write(romdata[0:write_size])
 
 		except Exception as e:
 			print_log(e, 1)
+
+def calc_rom_size(header):
+	size = 512 if (header[6] & 0x4) else 0
+
+	if (header[7] & 0xc) == 0x8:
+		if (header[9] & 0x0F) == 0x0F:
+			size += pow(2, ((header[4] & 0xFC) >> 2)) * (((header[4] & 0x3) * 2) + 1)
+		else:
+			size += (16384 * (((header[9] & 0xf) << 8) | header[4]))
+
+		if (header[9] & 0xF0) == 0xF0:
+			size += pow(2, ((header[5] & 0xFC) >> 2)) * (((header[5] & 0x3) * 2) + 1)
+		else:
+			size += (8192 * (((header[9] & 0xf0) << 4) | header[5]))
+	else:
+		size += 8192 * header[5]
+		size += 16384 * header[4]
+
+	return size
+
+def calc_rom_mapper(header):
+	calc_mapper = (header[7] & 0xf0) | ((header[6] & 0xF0) >> 4)
+	if (header[7] & 0xc) == 0x8:
+		calc_mapper = calc_mapper | ((header[8] & 0x0F) << 8)
+
+	return calc_mapper
 
 def parse_rom_data(fullname, file):
 	prgrom = bytearray()
@@ -272,20 +330,52 @@ def process_rom(rom_headers, root, unknown_sort_dir, file):
 	full_sort_name = os.path.join(unknown_sort_dir, file)
 	sha = hashlib.sha1()
 
+
 	romdata, header, unif, unheadered = parse_rom_data(fullname, file)
 
 	sha.update(romdata)
 	shastr = sha.hexdigest().upper()
+
+	assumed_size = 0
+
+	header_bytes = bytearray(0)
+
+	try:
+		header_bytes = bytearray(header)
+		if len(header_bytes) == 16:
+			assumed_size = calc_rom_size(header_bytes)
+	except:
+		pass
+
+	write_size = 0
+
+	if len(romdata) != assumed_size and assumed_size > 0:
+		print_log('Evaluating unexpected data (' + str(len(romdata)) + ' vs ' + str(assumed_size) + ') for ' + file, 4)
+		limited_sha = hashlib.sha1()
+		limited_sha.update(romdata[0:assumed_size])
+		limited_shastr = limited_sha.hexdigest().upper()
+		try:
+			found = rom_headers[shastr]
+			print_log('Using data size for evaluation.', 4)
+		except:
+			shastr = limited_shastr
+			print_log('Using reported size for evaluation.', 4)
+			write_size = assumed_size
 
 	try:
 		hstring = rom_headers[shastr]
 
 		if header != hstring:
 			print_log('Updating header for SHA1:' + shastr + ' File: ' + file, 3)
-			if (header != '0'):
+			if (len(header_bytes) == 16):
+				newmapper = calc_rom_mapper(bytearray(hstring))
+				oldmapper = calc_rom_mapper(header_bytes)
+				if newmapper != oldmapper:
+					print_log('Updating incorrect mapper from ' + str(oldmapper) + ' to ' + str(newmapper) + '.', 3)
+
 				print_log(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in header]) + ' (old)', 4)
 			print_log(" ".join(["{:02x}".format(ord(x) if isinstance(x, str) else x) for x in bytes(hstring)]) + ' (new)\n', 4)
-			write_new_file(hstring, romdata, fullname)
+			write_new_file(hstring, romdata, fullname, write_size)
 
 	except:
 		print_log('ROM not found in database. SHA1: ' + shastr + ' File: ' + file, 3)
