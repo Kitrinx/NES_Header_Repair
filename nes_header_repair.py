@@ -9,7 +9,7 @@
 # https://wiki.nesdev.com/w/index.php/NES_2.0
 
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
-START_PATH = '../SM'
+START_PATH = '.'
 
 # Use NES 2.0 headers. Set to 0 for NES 1.0 header. As not all roms can be properly represented
 # with iNES 1.0 headers, it is suggested to stay with 2.0.
