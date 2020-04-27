@@ -9,14 +9,14 @@
 # https://wiki.nesdev.com/w/index.php/NES_2.0
 
 # Starting path for directory navigation. Set to /media/fat/games/NES for most MiSTer setups
-START_PATH = '../SM'
+START_PATH = '.'
 
 # Use NES 2.0 headers. Set to 0 for NES 1.0 header. As not all roms can be properly represented
 # with iNES 1.0 headers, it is suggested to stay with 2.0.
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 0
+TRIAL_RUN = 1
 
 # Set to 1 to enable moving all unrecognised roms to ../nes_unknown
 SORT_UNKNOWN = 1
@@ -28,7 +28,7 @@ MARK_UNHEADERED = 1
 TRIM_UNKNOWN_DATA = 1
 
 # Level of verbosity for output. 0 is none, 1 is errors, 2 is important info, 3 is normal output, 4 is verbose
-VERBOSITY = 4
+VERBOSITY = 3
 
 
 ##### BELOW HERE IS CODE #####
