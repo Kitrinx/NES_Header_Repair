@@ -1,4 +1,4 @@
-#!/bin/python2
+#!/usr/bin/env python3
 
 # Header fixing script by Kitrinx
 
