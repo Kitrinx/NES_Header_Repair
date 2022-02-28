@@ -127,8 +127,9 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 	return header
 
 def populate_dict(nes2):
+	xml_filename = os.path.dirname(__file__) + "/nes20db.xml"
 	try:
-		tree = ET.parse('nes20db.xml')
+		tree = ET.parse(xml_filename)
 	except:
 		print_log("nes20db.xml is missing. Please place it in the same folder as this script.", 1)
 		raise
