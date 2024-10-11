@@ -16,7 +16,7 @@ START_PATH = '.'
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 0
+TRIAL_RUN = 1
 
 # Set to 1 to enable moving all unrecognised roms to ../nes_unknown
 SORT_UNKNOWN = 1
@@ -28,7 +28,7 @@ MARK_UNHEADERED = 1
 TRIM_UNKNOWN_DATA = 1
 
 # Level of verbosity for output. 0 is none, 1 is errors, 2 is important info, 3 is normal output, 4 is verbose
-VERBOSITY = 4
+VERBOSITY = 3
 
 
 ##### BELOW HERE IS CODE #####
@@ -127,7 +127,7 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 	return header
 
 def populate_dict(nes2):
-	xml_filename = os.path.dirname(__file__) + "nes20db.xml"
+	xml_filename = os.path.dirname(__file__) + "/nes20db.xml"
 	try:
 		tree = ET.parse(xml_filename)
 	except:
