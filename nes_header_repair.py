@@ -16,7 +16,7 @@ START_PATH = '.'
 NES_20 = 1
 
 # Set to 1 to prevent altering any files
-TRIAL_RUN = 1
+TRIAL_RUN = 0
 
 # Set to 1 to enable moving all unrecognised roms to ../nes_unknown
 SORT_UNKNOWN = 1
@@ -28,7 +28,7 @@ MARK_UNHEADERED = 1
 TRIM_UNKNOWN_DATA = 1
 
 # Level of verbosity for output. 0 is none, 1 is errors, 2 is important info, 3 is normal output, 4 is verbose
-VERBOSITY = 3
+VERBOSITY = 4
 
 
 ##### BELOW HERE IS CODE #####
@@ -127,7 +127,7 @@ def make_header(prgrom, prgram, prgnvram, chrrom, chrram, chrnvram, miscrom, con
 	return header
 
 def populate_dict(nes2):
-	xml_filename = os.path.dirname(__file__) + "/nes20db.xml"
+	xml_filename = os.path.dirname(__file__) + "nes20db.xml"
 	try:
 		tree = ET.parse(xml_filename)
 	except:
@@ -297,12 +297,23 @@ def parse_rom_data(fullname, file):
 			command = version_safe_str(buf)
 
 			while len(buf) > 0:
-				buf = romfile.read(4)
+				if buf[0] ==0x00 and buf[1] ==0x44 and buf[2] ==0x49 and buf[3] ==0x4E:
+					print('Bad UNIF: DINF chunk off by one')
+					romfile.seek(-3, 1)
+					buf = romfile.read(4)
+					command = version_safe_str(buf)
+
+				buf = romfile.read(4)					
 				readlength = 0
 				if isinstance(buf[0], str):
 					readlength = from_bytes(buf)
 				else:
-					readlength = int.from_bytes(buf, byteorder='little')
+					readlength = int.from_bytes(buf, byteorder='little')				
+					
+				if command == 'DIN' and readlength == 0:
+					print('Bad UNIF: DINF chunk with specified length of 0')
+					readlength =204
+					
 				buf = romfile.read(readlength)
 				if command == 'PRG':
 					prgrom.extend(buf)
@@ -419,7 +430,7 @@ def walk_dirs(rom_headers, start_path):
 
 		for file in files:
 
-			if file.lower().rfind('.nes') > 0 or file.lower().rfind('.unif') > 0:
+			if file.lower().rfind('.nes') > 0 or file.lower().rfind('.unif') > 0 or file.lower().rfind('.unf') > 0:
 				process_rom(rom_headers, root, unknown_sort_dir, file)
 
 			elif file.lower().rfind('.fds') > 0:
