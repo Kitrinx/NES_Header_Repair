@@ -48,7 +48,7 @@ def print_log(message, level):
 def make_rom_byte(romsize, divis, nes2):
 	rombyte = 0
 	# logic borrowed from NRS
-	if (romsize > 64 * 1024 * 1024 or romsize % divis != 0) and nes2: #exponent notation
+	if (romsize > 0xEFF * divis or romsize % divis != 0) and nes2: #exponent notation
 		multi = 1
 		if romsize % 3 == 0:
 			multi = 3
@@ -67,7 +67,7 @@ def make_rom_byte(romsize, divis, nes2):
 
 def make_rom_nibble(romsize, divis):
 	romnibble = 0
-	if romsize > 64 * 1024 * 1024 or romsize % divis != 0: #exponent notation
+	if romsize > 0xEFF * divis or romsize % divis != 0: #exponent notation
 		romnibble = 0xF
 	else:
 		romnibble = (int((romsize / divis)) & 0xF00) >> 8
